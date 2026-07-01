@@ -62,19 +62,21 @@
 
 (defn- q* [{:keys [api conn]} query & inputs]
   (apply (:q api) query ((:db api) conn) inputs))
-(defn- pull* [{:keys [api conn]} pattern eid] ((:pull api) ((:db api) conn) pattern eid))
 (defn- tx* [{:keys [api conn]} txd] ((:transact! api) conn txd))
 
 (defrecord DatomicStore [api conn]
   Store
   (chapter [this id]
-    (when-let [m (pull* this [:gh.tsumugu.chapter/id :gh.tsumugu.chapter/number
-                              :gh.tsumugu.chapter/title :gh.tsumugu.chapter/storyboard]
-                        [:gh.tsumugu.chapter/id id])]
-      (when (:gh.tsumugu.chapter/id m)
-        {:id (:gh.tsumugu.chapter/id m) :chapter (:gh.tsumugu.chapter/number m)
-         :title (:gh.tsumugu.chapter/title m)
-         :storyboard (or (dec* (:gh.tsumugu.chapter/storyboard m)) [])})))
+    ;; q-only (not pull*) — some kotoba-server pods don't implement the
+    ;; datomic.pull XRPC op at all (404 MethodNotImplemented).
+    (when-let [[number title storyboard]
+               (first (q* this '[:find ?number ?title ?storyboard :in $ ?id
+                                 :where [?e :gh.tsumugu.chapter/id ?id]
+                                        [?e :gh.tsumugu.chapter/number ?number]
+                                        [?e :gh.tsumugu.chapter/title ?title]
+                                        [?e :gh.tsumugu.chapter/storyboard ?storyboard]]
+                         id))]
+      {:id id :chapter number :title title :storyboard (or (dec* storyboard) [])}))
   (all-chapters [this]
     (->> (q* this '[:find [?id ...] :where [?e :gh.tsumugu.chapter/id ?id]])
          (map #(chapter this %)) (sort-by :chapter)))

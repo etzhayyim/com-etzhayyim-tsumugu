@@ -41,20 +41,33 @@
    load-or-create-identity!`) — tsumugu SELF-MINTS a CACAO for `:grant`
    (default a transact grant on its own graph). This is the charter path:
    no handed token, the agent issues its own capability.
+
+   Addresses the tenant database by `db-name` (via `langchain.kotoba-db/
+   kotoba-conn*`) — the wire shape the live edge's tenant Datom *write*
+   requires (it derives + verifies `kotobase/db/<did>/<db-name>` from the
+   CACAO's own DID server-side; a client-supplied raw `graph` is rejected
+   for tenant writes). Also passes the precomputed `canonical-graph` CID as
+   `:graph` — the live edge's *read* ops (`q`/`pull`/`entid`) need this
+   instead (empirically, `db_name` alone matches nothing on a read: 200 OK,
+   empty rows, no error). The CACAO's own resource scope is this same
+   `canonical-graph` CID (what the edge independently recomputes and checks
+   the signature against for both directions).
+
    opts:
-     :url   pod base URL    :graph target named graph (default: identity's own IPNS)
-     :json-write :json-read injected JSON fns (e.g. data.json)
-     :grant {:cap :cap/read|:cap/transact :scope graph} (default transact on own graph)
+     :url     pod base URL     :db-name target database (default: `default-db-name`)
+     :json-write :json-read    injected JSON fns (e.g. data.json)
+     :grant   {:cap :cap/read|:cap/transact :scope graph} (default transact on own graph)
      :http-fn optional override (defaults to jvm-http-fn)"
-  [{:keys [url graph json-write json-read identity grant http-fn]}]
-  (let [graph (or graph (:graph identity))
-        now   (str (Instant/now))
-        g     (or grant {:cap :cap/transact :scope graph})
-        cacao (cacao/mint identity g {:aud url :nonce (str (UUID/randomUUID))
-                                      :issued-at now
-                                      :expiry (str (.plusSeconds (Instant/now) 3600))})
+  [{:keys [url db-name json-write json-read identity grant http-fn]}]
+  (let [db-name (or db-name cacao/default-db-name)
+        graph   (cacao/canonical-graph (:did identity) db-name)
+        now     (str (Instant/now))
+        g       (or grant {:cap :cap/transact :scope graph})
+        mint-cacao (cacao/mint identity g {:aud url :nonce (str (UUID/randomUUID))
+                                           :issued-at now
+                                           :expiry (str (.plusSeconds (Instant/now) 3600))})
         host-caps {:http-fn (or http-fn jvm-http-fn)
                    :json-write json-write :json-read json-read}
         api  (kdb/kotoba-api host-caps)
-        conn (kdb/kotoba-conn url graph {:cacao cacao :did (:did identity)})]
+        conn (kdb/kotoba-conn* url db-name {:cacao mint-cacao :did (:did identity) :graph graph})]
     (store/->DatomicStore api conn)))
