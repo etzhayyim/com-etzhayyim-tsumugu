@@ -88,15 +88,24 @@ clojure -M:lint        # clj-kondo (errors fail)
 
 ## Status
 
-21 tests, 58 assertions, green (`clojure -M:dev:test`). Identity, store
-(Mem ≡ Datomic parity), content-read (verified against all 62 real chapters),
+23 tests, 62 assertions, green (`clojure -M:dev:test`). Identity (graph =
+`canonical-graph(did, db-name)`, byte-identical to the kotobase.net edge —
+verified against `kotobase.cid-test`'s own test vector), store (Mem ≡
+Datomic parity), content-read (verified against all 62 real chapters),
 coscientist tournament, and the full StateGraph (approval interrupt/resume,
 phase-gated auto-commit, hold-on-no-survivors) are exercised end-to-end
 against real Spirit in Physics storyboard data.
 
-**Not yet implemented** (tracked follow-ups): the `aozora-relay` downstream
-adapter (app-aozora polling/subscribing tsumugu's kotobase.net graph and
-projecting via `aozora.appview.manga`); the actual `kami-mangaka-page-clj`
-page-layout wiring (panels compose prompts today; page assembly is next);
-image-gen `render!` invocation (composition is pure/offline today by design —
-the coscientist tournament never touches the network).
+The downstream `aozora-relay` adapter (`app-aozora` polling tsumugu's
+kotobase.net graph and projecting via `aozora.appview.manga`) is built —
+[gftdcojp/app-aozora#35](https://github.com/gftdcojp/app-aozora/pull/35) —
+with its fetch→work-transform pure and fully tested (5 tests, no network),
+but the `kotobase.client` fetch integration itself is **not yet verified
+against a live kotobase.net pod** (none available in this workspace).
+
+**Not yet implemented** (tracked follow-ups): the actual
+`kami-mangaka-page-clj` page-layout wiring (panels compose prompts today;
+page assembly is next); image-gen `render!` invocation (composition is
+pure/offline today by design — the coscientist tournament never touches the
+network); a live kotobase.net pod to smoke-test the relay against before
+wiring it into a scheduled/cron trigger.
