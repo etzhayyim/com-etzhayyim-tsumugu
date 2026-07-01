@@ -99,13 +99,43 @@ against real Spirit in Physics storyboard data.
 The downstream `aozora-relay` adapter (`app-aozora` polling tsumugu's
 kotobase.net graph and projecting via `aozora.appview.manga`) is built —
 [gftdcojp/app-aozora#35](https://github.com/gftdcojp/app-aozora/pull/35) —
-with its fetch→work-transform pure and fully tested (5 tests, no network),
-but the `kotobase.client` fetch integration itself is **not yet verified
-against a live kotobase.net pod** (none available in this workspace).
+with its fetch→work-transform pure and fully tested (5 tests, no network).
+
+### Live kotobase.net verification (2026-07-01)
+
+`tsumugu.kotoba/kotoba-store` was smoke-tested against the real
+`https://kotobase.net` edge with a self-minted CACAO identity. Found and
+fixed two real protocol bugs along the way (both now merged/PR'd upstream):
+
+- **Read vs. write need opposite scope params.** `datomic.transact` derives
+  + verifies the tenant graph from `db_name` + the CACAO's own DID (a
+  client-supplied `graph` is rejected); `datomic.q`/`pull`/`entid` need the
+  precomputed `graph` CID directly — `db_name` alone silently matches
+  nothing there (200 OK, empty `rows_edn`, no error). Fixed in
+  `langchain.kotoba-db` — [kotoba-lang/langchain#5](https://github.com/kotoba-lang/langchain/pull/5)
+  (merged into this repo's `kotoba-store`/`DatomicStore` in `640ce49`).
+- **`datomic.pull` isn't implemented** on the live edge (404
+  `MethodNotImplemented`). `DatomicStore/chapter` no longer uses `pull*` —
+  rewritten as a `q`-only query.
+- **Server-side bug (not a client issue), found while diagnosing empty
+  reads**: `kotobase.net`'s `datomic.*` proxies to `kotobase.aozora.app`
+  (`kotobase-cf-wasm`; the old K8s pod was retired 2026-06-24), whose
+  `tx_edn` entity parser silently dropped any datom whose value contained
+  literal `{`/`}` (i.e. any `pr-str`'d map/vector — every real panel/chapter
+  payload) — `datomic.transact` returned `200 "ok"` with `datom_count: 0`,
+  no error. Fixed in [gftdcojp/net-kotobase#135](https://github.com/gftdcojp/net-kotobase/pull/135)
+  (open, not yet merged/deployed).
+
+**Full live write+read round-trip is blocked on that last PR being merged
+and deployed** (`wrangler deploy` to `kotobase-cf-wasm-staging` /
+`kotobase.aozora.app`) — writes with real (brace-containing) payloads
+currently still silently no-op on the live edge until then. Re-run
+`clojure -M:dev -e` against `tsumugu.kotoba/kotoba-store` once deployed to
+confirm end-to-end.
 
 **Not yet implemented** (tracked follow-ups): the actual
 `kami-mangaka-page-clj` page-layout wiring (panels compose prompts today;
 page assembly is next); image-gen `render!` invocation (composition is
 pure/offline today by design — the coscientist tournament never touches the
-network); a live kotobase.net pod to smoke-test the relay against before
-wiring it into a scheduled/cron trigger.
+network); wiring the relay into a scheduled/cron trigger once the live
+write path above is confirmed end-to-end.
