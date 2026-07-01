@@ -6,16 +6,21 @@
   functions in `kotoba.cacao` (kotoba-auth / kotoba-wasm), and the crypto is
   JDK Ed25519 + a minimal CBOR encoder.
 
-  Per-actor key model (kotoba/write.cljs: AUTHORITY is the Ed25519 signature
-  over a key-derived IPNS name, NOT a server): tsumugu generates + persists its
-  OWN Ed25519 key, and its graph IS that key — the key-derived IPNS name
-  (`ipns-name`, the 'k51…' name). The actor therefore owns its graph by holding
-  the key, so a depth-1 self-minted CACAO (iss = the actor's own DID = graph
-  owner) is authorized by construction — no owner hand-off, no shared token.
-  Use `load-or-create-identity!` to bootstrap/persist the actor's key."
+  Per-actor key model: tsumugu generates + persists its OWN Ed25519 key
+  (self-sovereign, no owner hand-off), and its graph is the deterministic
+  `canonical-graph(did, db-name)` CID the kotobase.net edge itself recomputes
+  from the DID + db-name on every write (ported from the CLJS `kotobase.cid`
+  client used elsewhere in this workspace's app-aozora — see that ns's
+  docstring: 'byte-identical to the kotobase.net edge'). A depth-1
+  self-minted CACAO (iss = the actor's own DID) is still authorized by
+  construction — only the DID holder can mint a valid CACAO for it — this
+  just changes which bytes get hashed into the graph CID (name-based, not
+  raw-pubkey-based), so one actor can own several named graphs instead of
+  exactly one. Use `load-or-create-identity!` to bootstrap/persist the
+  actor's key."
   (:require [clojure.edn :as edn]
             [clojure.string :as str])
-  (:import [java.security KeyPairGenerator Signature KeyFactory]
+  (:import [java.security KeyPairGenerator MessageDigest Signature KeyFactory]
            [java.security.spec PKCS8EncodedKeySpec X509EncodedKeySpec]
            [java.io ByteArrayOutputStream]
            [java.util Base64]))
@@ -102,41 +107,75 @@
         framed (byte-array (concat [(unchecked-byte 0xED) (unchecked-byte 0x01)] (seq raw)))]
     (str "did:key:z" (base58btc framed))))
 
-;; ───────── key-derived IPNS graph name (per-actor graph) ─────────
-;; Each actor's graph IS its own key: the graph name is the libp2p-key IPNS
-;; name derived from the actor's Ed25519 pubkey (kotoba/write.cljs: "AUTHORITY
-;; is the Ed25519 signature over a key-derived IPNS name, NOT a server"). So the
-;; actor owns its graph by holding the key — self-mint is authorized by
-;; construction, no owner hand-off.
+;; ───────── canonical graph CID (per-actor, per-database) ─────────
+;; The graph handle is the CIDv1/dag-cbor/sha2-256 of the name
+;; "kotobase/db/<did>/<db-name>" — byte-identical to the kotobase.net edge and
+;; to `kotobase.cid/canonical-graph` (the CLJS client this workspace's
+;; app-aozora already uses live). Porting the SAME derivation here (rather
+;; than a parallel raw-pubkey scheme) means tsumugu's graph is exactly what
+;; any kotobase.net-speaking client — including the app-aozora relay that
+;; reads tsumugu's published content — independently recomputes from the DID
+;; alone, with no shared secret.
 
-(def ^:private b36 "0123456789abcdefghijklmnopqrstuvwxyz")
+(def ^:private b32 "abcdefghijklmnopqrstuvwxyz234567")
 
-(defn- base36 [^bytes data]
-  (let [sb (StringBuilder.) k (java.math.BigInteger/valueOf 36)]
-    (loop [n (java.math.BigInteger. 1 data)]
-      (when (pos? (.signum n))
-        (.append sb (.charAt b36 (.intValue (.mod n k))))
-        (recur (.divide n k))))
-    (.toString (.reverse sb))))
+(defn- sha256 ^bytes [^bytes data]
+  (.digest (MessageDigest/getInstance "SHA-256") data))
 
-(defn ipns-name
-  "The actor's own graph: the base36 CIDv1 (libp2p-key, identity multihash)
-  IPNS name of its Ed25519 pubkey — i.e. the 'k51…' name. DID-derived, so the
-  actor IS the authority over this graph."
-  [pub]
-  (let [raw (raw-pub pub)
-        pb  (byte-array (map unchecked-byte (concat [0x08 0x01 0x12 0x20] (seq raw)))) ; libp2p PublicKey proto
-        mh  (byte-array (map unchecked-byte (concat [0x00 (alength pb)] (seq pb))))    ; identity multihash
-        cid (byte-array (map unchecked-byte (concat [0x01 0x72] (seq mh))))]           ; CIDv1 libp2p-key
-    (str "k" (base36 cid))))
+(defn- base32-lower-no-pad
+  "CIDv1 base32-lower, no padding (multibase 'b' payload) — 8-bit input drained
+  as 5-bit groups, MSB-first. Ported from `kotobase.cid/base32-lower-no-pad`."
+  [^bytes data]
+  (let [sb (StringBuilder.)
+        {:keys [bits value]}
+        (reduce
+         (fn [{:keys [bits value]} b]
+           (let [b (bit-and (int b) 0xff)
+                 value (bit-or (bit-shift-left value 8) b)
+                 bits (+ bits 8)]
+             (loop [bits bits value value]
+               (if (>= bits 5)
+                 (do (.append sb (.charAt b32 (bit-and (unsigned-bit-shift-right value (- bits 5)) 31)))
+                     (recur (- bits 5) value))
+                 {:bits bits :value value}))))
+         {:bits 0 :value 0}
+         data)]
+    (when (pos? bits)
+      (.append sb (.charAt b32 (bit-and (bit-shift-left value (- 5 bits)) 31))))
+    (.toString sb)))
+
+(defn graph-cid-from-name
+  "KotobaCid::from_bytes(name).to_multibase(): SHA-256(name) behind a
+  CIDv1/dag-cbor/sha2-256 header (0x01 0x71 0x12 0x20), base32-lower 'b'.
+  Ported from `kotobase.cid/graph-cid-from-name`."
+  [^String name]
+  (let [hash (sha256 (.getBytes name "UTF-8"))
+        cid  (byte-array (concat [(unchecked-byte 0x01) (unchecked-byte 0x71)
+                                   (unchecked-byte 0x12) (unchecked-byte 0x20)]
+                                  (seq hash)))]
+    (str "b" (base32-lower-no-pad cid))))
+
+(defn canonical-graph
+  "The deterministic graph CID for one of tsumugu's databases. The edge
+  recomputes exactly this from the DID + db-name and pins it into every
+  write. Ported from `kotobase.cid/canonical-graph`."
+  [did db-name]
+  (graph-cid-from-name (str "kotobase/db/" did "/" db-name)))
+
+(def default-db-name
+  "tsumugu's primary content database — the manga panel/chapter ledger."
+  "manga")
 
 (defn generate-identity
-  "A fresh Ed25519 identity {:private-key :public-key :did}. For owner/test
-  bootstrap — a provisioned agent persists and reloads its key instead."
+  "A fresh Ed25519 identity {:private-key :public-key :did :graph}. For
+  owner/test bootstrap — a provisioned agent persists and reloads its key
+  instead."
   []
   (let [kp (.generateKeyPair (KeyPairGenerator/getInstance "Ed25519"))
-        pub (.getPublic kp)]
-    {:private-key (.getPrivate kp) :public-key pub :did (did-key pub) :graph (ipns-name pub)
+        pub (.getPublic kp)
+        did (did-key pub)]
+    {:private-key (.getPrivate kp) :public-key pub :did did
+     :graph (canonical-graph did default-db-name)
      :private-b64 (.encodeToString (Base64/getEncoder) (.getEncoded (.getPrivate kp)))
      :public-b64  (.encodeToString (Base64/getEncoder) (.getEncoded pub))}))
 
@@ -145,15 +184,18 @@
   [{:keys [private-b64 public-b64]}]
   (let [kf (KeyFactory/getInstance "Ed25519")
         priv (.generatePrivate kf (PKCS8EncodedKeySpec. (.decode (Base64/getDecoder) private-b64)))
-        pub  (.generatePublic kf (X509EncodedKeySpec. (.decode (Base64/getDecoder) public-b64)))]
-    {:private-key priv :public-key pub :did (did-key pub) :graph (ipns-name pub)
+        pub  (.generatePublic kf (X509EncodedKeySpec. (.decode (Base64/getDecoder) public-b64)))
+        did  (did-key pub)]
+    {:private-key priv :public-key pub :did did
+     :graph (canonical-graph did default-db-name)
      :private-b64 private-b64 :public-b64 public-b64}))
 
 (defn load-or-create-identity!
   "Per-actor key: load tsumugu's persisted Ed25519 identity at `path`, or
   generate + persist one on first run (only the b64 key material is stored).
   Returns {:private-key :public-key :did :graph …}. This is the 'each actor
-  issues its own key' bootstrap — the actor's graph is the key-derived IPNS."
+  issues its own key' bootstrap — the actor's graph is `canonical-graph(did,
+  default-db-name)`."
   [path]
   (let [f (java.io.File. ^String path)]
     (if (.exists f)

@@ -40,11 +40,26 @@
     (is (= 0xA3 (bit-and (aget bytes 0) 0xff)) "top-level CBOR is map(3) = {h,p,s}")
     (is (pos? (count cacao)))))
 
-(deftest graph-is-key-derived-ipns
-  (testing "the actor's graph IS its key — the canonical ed25519 IPNS name"
-    (let [{:keys [graph]} (c/generate-identity)]
-      (is (str/starts-with? graph "k51qzi5uqu5d")
-          "all ed25519 IPNS names share the k51qzi5uqu5d… CID-framing prefix"))))
+(deftest graph-cid-format
+  (testing "CIDv1/dag-cbor/sha2-256 graph handle is base32 'bafyrei…'"
+    ;; Same input string as kotobase.cid-test's graph-cid-format (CLJS) — if
+    ;; this JVM port is byte-identical to the kotobase.net edge, it MUST
+    ;; produce the exact same 59-char CID for the exact same name.
+    (let [g (c/graph-cid-from-name "kotobase/db/did:key:zTest/people")]
+      (is (str/starts-with? g "bafyrei"))
+      (is (= 59 (count g))))))
+
+(deftest graph-cid-deterministic
+  (let [a (c/canonical-graph "did:key:zABC" "people")
+        b (c/canonical-graph "did:key:zABC" "people")
+        c (c/canonical-graph "did:key:zABC" "places")]
+    (is (= a b) "same name → same CID")
+    (is (not= a c) "different db-name → different CID")))
+
+(deftest generated-identity-graph-is-canonical
+  (let [{:keys [did graph]} (c/generate-identity)]
+    (is (= graph (c/canonical-graph did c/default-db-name))
+        "identity's :graph is canonical-graph(did, default-db-name)")))
 
 (deftest per-actor-key-persists
   (testing "load-or-create! generates once, then reloads the same identity"

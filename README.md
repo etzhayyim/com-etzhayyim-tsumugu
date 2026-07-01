@@ -52,11 +52,15 @@ storyboard panel (from org-spirit-in-physics-comics)
 **mangallm never commits a panel the coscientist tournament didn't produce a
 surviving candidate for, and the PolicyGovernor never lets a low-confidence
 or high-stakes (splash/full-page) panel auto-commit without a human look.**
-tsumugu holds its own Ed25519 key — the key-derived IPNS name IS its graph
-(`tsumugu.cacao`, ported from `itonami.cacao`) — so publishing never depends
-on `app-aozora`'s owner secret or deploy lifecycle; downstream consumers
+tsumugu holds its own Ed25519 key — its graph is `canonical-graph(did,
+"manga")`, the same CIDv1/dag-cbor/sha2-256-of-name derivation the
+kotobase.net edge itself recomputes from the DID alone (`tsumugu.cacao`,
+ported from `kotobase.cid` — the CLJS client app-aozora already uses live —
+rather than the raw-pubkey-derived IPNS scheme `itonami.cacao` uses, which
+doesn't match what the real edge resolves). So publishing never depends on
+`app-aozora`'s owner secret or deploy lifecycle; downstream consumers
 (aozora.app first, then X/Instagram/LINE) each independently relay from
-tsumugu's own graph.
+tsumugu's own graph, addressing it the same way tsumugu itself does.
 
 ## Run
 
@@ -70,7 +74,7 @@ clojure -M:lint        # clj-kondo (errors fail)
 
 | File | Role |
 |---|---|
-| `src/tsumugu/cacao.clj` | Self-sovereign identity — Ed25519 → did:key → key-derived IPNS graph. Ported from `itonami.cacao`. |
+| `src/tsumugu/cacao.clj` | Self-sovereign identity — Ed25519 → did:key → `canonical-graph(did, db-name)`. CACAO mint ported from `itonami.cacao`; graph derivation ported from `kotobase.cid` (byte-identical to the kotobase.net edge). |
 | `src/tsumugu/kotoba.clj` | Wires a `tsumugu.store/DatomicStore` to a kotoba-server pod (kotobase.net), self-minting its own CACAO. Ported from `itonami.kotoba`. |
 | `src/tsumugu/store.cljc` | `Store` protocol — MemStore (default) ‖ DatomicStore (in-process EAVT, or kotoba-server via `:db-api` swap). |
 | `src/tsumugu/content.clj` | Reads chapters/storyboards from `org-spirit-in-physics-comics` ($SIP_IP_ROOT). Mirrors `sip.storyboard`. |
