@@ -10,12 +10,13 @@
         gftd/kami-mangaka-page-clj   {:local/root "../../kotoba-lang/kami-engine/kami-mangaka-page-clj"}}
 
  :aliases
- {;; override langgraph-clj's transitive langchain-clj — pinned ahead of main
-  ;; for the kotoba-conn* read/write-scope split (kotoba-lang/langchain#5,
-  ;; not yet merged); revert to langgraph-clj's own default once merged.
+ {;; override langgraph-clj's transitive langchain-clj — langgraph-clj itself
+  ;; still pins the old v0.1.0/ae475c9 tag, which predates the kotoba-conn*
+  ;; read/write-scope split (kotoba-lang/langchain#5, merged 8b25753). Drop
+  ;; this override once langgraph-clj's own pin advances past that commit.
   :dev {:override-deps {io.github.com-junkawasaki/langchain-clj
                          {:git/url "https://github.com/kotoba-lang/langchain.git"
-                          :git/sha "2556cedf3e657656ad2a7cc9df1617ff6593cdf2"}}}
+                          :git/sha "8b25753f12643be51e3697400ed1541d97990304"}}}
 
   :run  {:main-opts ["-m" "tsumugu.sim"]}
 
