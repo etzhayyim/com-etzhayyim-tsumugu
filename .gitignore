@@ -1,0 +1,9 @@
+.cpcache/
+.nrepl-port
+*.class
+target/
+.lsp/
+.clj-kondo/.cache/
+
+# the actor's own Ed25519 identity — never commit a private key
+.tsumugu/

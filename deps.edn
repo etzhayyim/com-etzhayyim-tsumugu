@@ -1,0 +1,25 @@
+;; com-etzhayyim-tsumugu — Spirit in Physics (Ghost Hacker universe) manga
+;; publishing actor. StateGraph containment + governor + append-only ledger
+;; (CLAUDE.md "Actors"), self-sovereign kotoba-server identity (no owner
+;; hand-off), co-scientist quality loop before any panel/page commits.
+{:paths ["src"]
+
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        io.github.com-junkawasaki/langgraph-clj {:local/root "../../com-junkawasaki/langgraph-clj"}
+        gftd/kami-mangaka-render-clj {:local/root "../../kotoba-lang/kami-engine/kami-mangaka-render-clj"}
+        gftd/kami-mangaka-page-clj   {:local/root "../../kotoba-lang/kami-engine/kami-mangaka-page-clj"}}
+
+ :aliases
+ {;; override langgraph-clj's transitive langchain-clj with the local root
+  :dev {:override-deps {io.github.com-junkawasaki/langchain-clj
+                         {:local/root "../../com-junkawasaki/langchain-clj"}}}
+
+  :run  {:main-opts ["-m" "tsumugu.sim"]}
+
+  :test {:extra-paths ["test"]
+         :extra-deps  {io.github.cognitect-labs/test-runner
+                        {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+         :main-opts   ["-m" "cognitect.test-runner"]}
+
+  :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
+         :main-opts    ["-m" "clj-kondo.main" "--lint" "src" "test" "--fail-level" "error"]}}}
