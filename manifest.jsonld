@@ -1,0 +1,21 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    "https://etzhayyim.com/ns/actor-manifest"
+  ],
+  "@type": "ActorManifest",
+  "id": "did:web:etzhayyim.github.io:com-etzhayyim-tsumugu",
+  "name": "tsumugu",
+  "displayName": "紡ぐ — Spirit in Physics Manga Publisher",
+  "displayNameJa": "紡ぐ",
+  "description": "Spirit in Physics (Ghost Hacker universe) manga publishing actor: generates panel compositions via the kami-mangaka-{render,page}-clj commons, quality-gates them through a co-scientist tournament, and commits only what an independent PolicyGovernor + human approval clear. langgraph-clj StateGraph actor pattern (containment + independent governor + append-only ledger).",
+  "tier": "Tier-B",
+  "parentActor": null,
+  "firstTouchChannelInvariant": "app-aozora — com.atproto.repo.createRecord (collection com.etzhayyim.apps.tsumugu). publication = SPEECH (autonomous); NOT actuation.",
+  "lexicons": [
+    "com.etzhayyim.apps.tsumugu.mangaPage"
+  ],
+  "adr": {
+    "topology": "com-junkawasaki:adr:2607022300"
+  }
+}
