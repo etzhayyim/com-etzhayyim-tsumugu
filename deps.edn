@@ -6,8 +6,15 @@
 
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}
         io.github.com-junkawasaki/langgraph-clj {:local/root "../../com-junkawasaki/langgraph-clj"}
-        gftd/kami-mangaka-render-clj {:local/root "../../kotoba-lang/kami-engine/kami-mangaka-render-clj"}
-        gftd/kami-mangaka-page-clj   {:local/root "../../kotoba-lang/kami-engine/kami-mangaka-page-clj"}}
+        ;; kami-mangaka-{render,page}-clj were split out of kami-engine and
+        ;; renamed to drop the -clj suffix (ADR-2607022800 Phase 2); this repo's
+        ;; deps.edn had not been updated to follow, so it still pointed at the
+        ;; now-orphaned kami-engine subtree copies. Same fix already applied to
+        ;; kami-app-sip's deps.edn (ADR-2607022800 :post-rename-dep-fixes).
+        gftd/kami-mangaka-render {:git/url "https://github.com/kotoba-lang/kami-mangaka-render.git"
+                                  :sha "2122c2a66c617d05bab21ed423b47b1956f826d3"}
+        gftd/kami-mangaka-page   {:git/url "https://github.com/kotoba-lang/kami-mangaka-page.git"
+                                  :sha "c416dd96dfefc251d0c66eb87999fb258f7ad315"}}
 
  :aliases
  {;; override langgraph-clj's transitive langchain-clj — langgraph-clj itself
