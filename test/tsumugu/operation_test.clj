@@ -68,6 +68,25 @@
       (when (= :commit (get-in res [:state :disposition]))
         (is (some? (store/committed-panel s (:id panel))))))))
 
+(deftest phase-2-never-auto-commits-a-high-stakes-splash-panel
+  ;; PolicyGovernor's high-stakes check used to read
+  ;; (get-in proposal [:value :layout]) -- :value is the composed render
+  ;; spec, which never carries :layout (kami.mangaka.render/compose
+  ;; consumes it internally to derive :aspect, then drops it), so that
+  ;; read was always nil and this escalation could never fire. Panel
+  ;; "01-01" is a real splash/full-page panel (manga.edn) -- even in
+  ;; phase 2 (supervised-auto), it must escalate/hold, never silently
+  ;; auto-commit with zero human review.
+  (testing "phase 2 still refuses to auto-commit a splash/full-page panel"
+    (let [s (seed! (store/seed-db))
+          actor (op/build s)
+          req {:op :panel/compose :panel-id "01-01" :chapter-id "vol01-water-city/ch01"
+               :anchors (anchors)}
+          res (g/run* actor {:request req :context {:actor-id "tsumugu" :phase 2}} {:thread-id "t6"})]
+      (is (not= :commit (get-in res [:state :disposition]))
+          "a splash/full-page panel must not auto-commit even in phase 2")
+      (is (nil? (store/committed-panel s "01-01"))))))
+
 (deftest missing-panel-holds
   (testing "a panel-id that doesn't exist in the chapter → no surviving candidate → HOLD"
     (let [s (seed! (store/seed-db))
