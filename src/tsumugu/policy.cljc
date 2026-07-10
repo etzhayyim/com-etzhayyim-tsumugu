@@ -21,8 +21,10 @@
 (def confidence-floor 0.4)
 
 (def high-stakes-layouts
-  "Layouts weighty enough to always want a human look, even when the
-  tournament was clean."
+  "Page-layout (\"splash\") or panel-size (\"full-page\") values weighty
+  enough to always want a human look, even when the tournament was
+  clean -- checked against both the panel's :layout and :size (see
+  `check` below)."
   #{"splash" "full-page"})
 
 (defn check
@@ -35,7 +37,17 @@
                       :detail "coscientist tournament had no survivors — nothing to commit"}))
         conf (:confidence proposal 0.0)
         low? (< conf confidence-floor)
-        stakes? (contains? high-stakes-layouts (get-in proposal [:value :layout]))
+        ;; NOT (get-in proposal [:value :layout]) -- :value is the composed
+        ;; render spec ({:tags :prompt :neg :refs :aspect :dims}, see
+        ;; kami.mangaka.render/compose), which never carries :layout: the
+        ;; panel's :layout is consumed internally to derive :aspect and
+        ;; then dropped. That old read was always nil, so this high-stakes
+        ;; escalation could never fire -- a splash/full-page panel could
+        ;; auto-commit with zero human review, contradicting this file's
+        ;; own docstring and the repo's CLAUDE.md invariant. :layout/:size
+        ;; are now surfaced directly on the proposal (mangallm.cljc).
+        stakes? (boolean (or (contains? high-stakes-layouts (:layout proposal))
+                             (contains? high-stakes-layouts (:size proposal))))
         hard? (boolean (seq hard))]
     {:ok?         (and (not hard?) (not low?) (not stakes?))
      :violations  hard

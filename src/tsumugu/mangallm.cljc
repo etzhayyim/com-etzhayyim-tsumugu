@@ -12,6 +12,14 @@
      :cites      [kw…] ; panel fields the winning strategy drew from
      :effect     :commit-panel | :noop
      :value      {…}   ; the composed render spec (:tags :prompt :neg :aspect)
+     :layout     str   ; the panel's page-level layout (e.g. \"splash\") --
+                        ; NOT part of :value (the render spec never carries
+                        ; it; :layout is consumed internally by
+                        ; tsumugu.render/compose to derive :aspect and
+                        ; otherwise dropped), so tsumugu.policy's high-stakes
+                        ; check needs it surfaced here directly
+     :size       str   ; the panel's own size (e.g. \"full-page\"), same
+                        ; reason as :layout above
      :panel-id   str
      :confidence 0..1  ; survivor fraction of the tournament (0 → :noop)}"
   (:require [tsumugu.coscientist :as cosci]
@@ -73,6 +81,8 @@
                                        (when (seq (:colorNote panel)) :colorNote)]))
              :effect :commit-panel
              :value composed
+             :layout (:layout panel)
+             :size (:size panel)
              :panel-id panel-id
              :confidence (min 1.0 (/ (double (count ranked)) (double (count cosci/catalog))))}))))))
 
