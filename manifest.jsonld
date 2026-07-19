@@ -12,9 +12,6 @@
   "tier": "Tier-B",
   "parentActor": null,
   "firstTouchChannelInvariant": "app-aozora — com.atproto.repo.createRecord (collection com.etzhayyim.apps.tsumugu). publication = SPEECH (autonomous); NOT actuation.",
-  "lexicons": [
-    "com.etzhayyim.apps.tsumugu.mangaPage"
-  ],
   "adr": {
     "topology": "com-junkawasaki:adr:2607022300"
   }
